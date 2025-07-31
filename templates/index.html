@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Downloader - Download from YouTube, TikTok & More</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-download"></i>
+                <h1>Video Downloader</h1>
+            </div>
+            <p class="subtitle">Download videos from YouTube, TikTok, Instagram, Facebook and more</p>
+        </header>
+
+        <main class="main-content">
+            <div class="download-card">
+                <form id="downloadForm" class="download-form">
+                    <div class="input-group">
+                        <div class="input-wrapper">
+                            <i class="fas fa-link input-icon"></i>
+                            <input 
+                                type="url" 
+                                id="videoUrl" 
+                                placeholder="Paste your video URL here (YouTube, TikTok, Instagram, etc.)" 
+                                required
+                                autocomplete="off"
+                            >
+                            <button type="button" id="clearBtn" class="clear-btn" title="Clear URL">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="options-group">
+                        <div class="format-selector">
+                            <label for="format">Format:</label>
+                            <select id="format" name="format">
+                                <option value="mp4">MP4 Video (Best Quality)</option>
+                                <option value="audio">MP3 Audio Only</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="downloadBtn" class="download-btn">
+                        <span class="btn-text">
+                            <i class="fas fa-download"></i>
+                            Download Video
+                        </span>
+                        <div class="loading-spinner" id="loadingSpinner">
+                            <div class="spinner"></div>
+                            <span>Processing...</span>
+                        </div>
+                    </button>
+                </form>
+
+                <div id="videoInfo" class="video-info hidden">
+                    <div class="info-card">
+                        <img id="videoThumbnail" src="" alt="Video thumbnail" class="thumbnail">
+                        <div class="info-details">
+                            <h3 id="videoTitle"></h3>
+                            <p id="videoUploader"></p>
+                            <p id="videoDuration"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="errorMessage" class="error-message hidden">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="errorText"></span>
+                </div>
+
+                <div id="successMessage" class="success-message hidden">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Download started! Your file will be saved shortly.</span>
+                </div>
+            </div>
+
+            <div class="features">
+                <div class="feature">
+                    <i class="fas fa-bolt"></i>
+                    <h3>Fast Downloads</h3>
+                    <p>High-speed video processing and downloading</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-shield-alt"></i>
+                    <h3>Secure & Private</h3>
+                    <p>No data stored, completely private downloads</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-mobile-alt"></i>
+                    <h3>Multi-Platform</h3>
+                    <p>Works on desktop, tablet, and mobile devices</p>
+                </div>
+            </div>
+
+            <div class="supported-platforms">
+                <h3>Supported Platforms</h3>
+                <div class="platforms">
+                    <div class="platform">
+                        <i class="fab fa-youtube"></i>
+                        <span>YouTube</span>
+                    </div>
+                    <div class="platform">
+                        <i class="fab fa-tiktok"></i>
+                        <span>TikTok</span>
+                    </div>
+                    <div class="platform">
+                        <i class="fab fa-instagram"></i>
+                        <span>Instagram</span>
+                    </div>
+                    <div class="platform">
+                        <i class="fab fa-facebook"></i>
+                        <span>Facebook</span>
+                    </div>
+                    <div class="platform">
+                        <i class="fab fa-twitter"></i>
+                        <span>Twitter</span>
+                    </div>
+                    <div class="platform">
+                        <i class="fab fa-vimeo"></i>
+                        <span>Vimeo</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 Video Downloader. Built with Flask & yt-dlp.</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
