@@ -1,100 +1,219 @@
-class VideoDownloader {
-    constructor() {
-        this.initializeElements();
-        this.bindEvents();
-        this.loadingStates = {
-            info: false,
-            download: false
-        };
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM elements
+    const form = document.getElementById('downloadForm');
+    const urlInput = document.getElementById('videoUrl');
+    const formatSelect = document.getElementById('format');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+    const videoInfo = document.getElementById('videoInfo');
+    const errorText = document.getElementById('errorText');
+
+    // State management
+    let isDownloading = false;
+    let infoTimeout = null;
+
+    // Initialize
+    init();
+
+    function init() {
+        setupEventListeners();
+        updateClearButton();
     }
 
-    initializeElements() {
-        this.urlInput = document.getElementById('url-input');
-        this.getInfoBtn = document.getElementById('get-info-btn');
-        this.downloadBtn = document.getElementById('download-btn');
-        this.formatSelect = document.getElementById('format-select');
-        this.qualitySelect = document.getElementById('quality-select');
-        this.videoInfo = document.getElementById('video-info');
-        this.messageDiv = document.getElementById('message');
-        this.progressDiv = document.getElementById('progress');
-        this.downloadOptions = document.getElementById('download-options');
-    }
-
-    bindEvents() {
-        this.getInfoBtn.addEventListener('click', () => this.getVideoInfo());
-        this.downloadBtn.addEventListener('click', () => this.downloadVideo());
-        this.urlInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.getVideoInfo();
-            }
-        });
-        this.formatSelect.addEventListener('change', () => this.updateQualityOptions());
-    }
-
-    showMessage(message, type = 'info', duration = 5000) {
-        this.messageDiv.textContent = message;
-        this.messageDiv.className = `message ${type}`;
-        this.messageDiv.style.display = 'block';
+    function setupEventListeners() {
+        // Form submission
+        form.addEventListener('submit', handleFormSubmit);
         
-        setTimeout(() => {
-            this.messageDiv.style.display = 'none';
-        }, duration);
-    }
-
-    showError(message, suggestion = null, duration = null) {
-        let fullMessage = message;
-        if (suggestion) {
-            fullMessage += ` ${suggestion}`;
-        }
+        // URL input events
+        urlInput.addEventListener('input', handleUrlInput);
+        urlInput.addEventListener('paste', handleUrlPaste);
+        urlInput.addEventListener('focus', hideMessages);
         
-        // Use longer duration for messages with suggestions
-        const displayDuration = duration || (suggestion ? 8000 : 5000);
+        // Clear button
+        clearBtn.addEventListener('click', clearUrl);
         
-        this.showMessage(fullMessage, 'error', displayDuration);
-    }
-
-    showProgress(show = true) {
-        this.progressDiv.style.display = show ? 'block' : 'none';
-    }
-
-    setLoadingState(type, loading) {
-        this.loadingStates[type] = loading;
+        // Format change
+        formatSelect.addEventListener('change', hideMessages);
         
-        if (type === 'info') {
-            this.getInfoBtn.disabled = loading;
-            this.getInfoBtn.textContent = loading ? 'Getting Info...' : 'Get Video Info';
-        } else if (type === 'download') {
-            this.downloadBtn.disabled = loading;
-            this.downloadBtn.textContent = loading ? 'Downloading...' : 'Download';
-        }
+        // Keyboard shortcuts
+        document.addEventListener('keydown', handleKeydown);
     }
 
-    validateUrl(url) {
+    function handleFormSubmit(e) {
+        e.preventDefault();
+        
+        if (isDownloading) return;
+        
+        const url = urlInput.value.trim();
+        const format = formatSelect.value;
+        
         if (!url) {
-            this.showError('Please enter a URL');
-            return false;
-        }
-
-        const urlPattern = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com|twitch\.tv|facebook\.com|instagram\.com|tiktok\.com)/i;
-        if (!urlPattern.test(url)) {
-            this.showError('Please enter a valid URL from a supported platform (YouTube, Vimeo, etc.)');
-            return false;
-        }
-
-        return true;
-    }
-
-    async getVideoInfo() {
-        const url = this.urlInput.value.trim();
-        
-        if (!this.validateUrl(url)) {
+            showError('Please enter a video URL');
+            urlInput.focus();
             return;
         }
+        
+        if (!isValidUrl(url)) {
+            showError('Please enter a valid URL');
+            urlInput.focus();
+            return;
+        }
+        
+        downloadVideo(url, format);
+    }
 
-        this.setLoadingState('info', true);
-        this.videoInfo.style.display = 'none';
-        this.downloadOptions.style.display = 'none';
+    function handleUrlInput(e) {
+        updateClearButton();
+        hideMessages();
+        
+        // Debounced info fetching
+        if (infoTimeout) {
+            clearTimeout(infoTimeout);
+        }
+        
+        const url = e.target.value.trim();
+        if (url && isValidUrl(url)) {
+            infoTimeout = setTimeout(() => {
+                fetchVideoInfo(url);
+            }, 1000);
+        } else {
+            hideVideoInfo();
+        }
+    }
 
+    function handleUrlPaste(e) {
+        // Small delay to ensure pasted content is available
+        setTimeout(() => {
+            updateClearButton();
+            const url = urlInput.value.trim();
+            if (url && isValidUrl(url)) {
+                fetchVideoInfo(url);
+            }
+        }, 100);
+    }
+
+    function handleKeydown(e) {
+        // Ctrl/Cmd + Enter to submit
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            if (!isDownloading) {
+                form.dispatchEvent(new Event('submit'));
+            }
+        }
+        
+        // Escape to clear
+        if (e.key === 'Escape') {
+            clearUrl();
+        }
+    }
+
+    function clearUrl() {
+        urlInput.value = '';
+        urlInput.focus();
+        hideMessages();
+        hideVideoInfo();
+        updateClearButton();
+        
+        if (infoTimeout) {
+            clearTimeout(infoTimeout);
+        }
+    }
+
+    function updateClearButton() {
+        const hasValue = urlInput.value.trim().length > 0;
+        clearBtn.style.display = hasValue ? 'flex' : 'none';
+    }
+
+    function setLoadingState(loading) {
+        isDownloading = loading;
+        downloadBtn.disabled = loading;
+        downloadBtn.innerHTML = loading ? 
+            '<span class="spinner"></span>Downloading...' : 
+            'Download';
+        
+        if (loading) {
+            downloadBtn.classList.add('loading');
+        } else {
+            downloadBtn.classList.remove('loading');
+        }
+    }
+
+    function showError(message, suggestion = '') {
+        hideMessages();
+        errorText.textContent = message;
+        if (suggestion) {
+            errorText.innerHTML = `${message}<br><small style="opacity: 0.8; font-size: 0.9em;">${suggestion}</small>`;
+        }
+        errorMessage.classList.remove('hidden');
+        
+        // Auto-hide after delay (longer for suggestions)
+        const hideDelay = suggestion ? 8000 : 5000;
+        setTimeout(() => {
+            hideMessages();
+        }, hideDelay);
+    }
+
+    function showSuccess() {
+        hideMessages();
+        successMessage.classList.remove('hidden');
+        
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+            hideMessages();
+        }, 3000);
+    }
+
+    function hideMessages() {
+        errorMessage.classList.add('hidden');
+        successMessage.classList.add('hidden');
+    }
+
+    function showVideoInfo(info) {
+        const infoContent = document.getElementById('infoContent');
+        const thumbnail = document.getElementById('thumbnail');
+        const title = document.getElementById('title');
+        const uploader = document.getElementById('uploader');
+        const duration = document.getElementById('duration');
+        const views = document.getElementById('views');
+        
+        // Update thumbnail
+        if (info.thumbnail) {
+            thumbnail.src = info.thumbnail;
+            thumbnail.style.display = 'block';
+        } else {
+            thumbnail.style.display = 'none';
+        }
+        
+        // Update text content
+        title.textContent = info.title || 'Unknown Title';
+        uploader.textContent = info.uploader || 'Unknown Uploader';
+        
+        // Format duration
+        if (info.duration) {
+            const minutes = Math.floor(info.duration / 60);
+            const seconds = info.duration % 60;
+            duration.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        } else {
+            duration.textContent = 'Unknown';
+        }
+        
+        // Format view count
+        if (info.view_count) {
+            views.textContent = formatNumber(info.view_count);
+        } else {
+            views.textContent = 'Unknown';
+        }
+        
+        videoInfo.classList.remove('hidden');
+    }
+
+    function hideVideoInfo() {
+        videoInfo.classList.add('hidden');
+    }
+
+    async function fetchVideoInfo(url) {
         try {
             const response = await fetch('/info', {
                 method: 'POST',
@@ -103,207 +222,146 @@ class VideoDownloader {
                 },
                 body: JSON.stringify({ url })
             });
-
+            
             const data = await response.json();
-
-            if (!response.ok) {
-                if (response.status === 429) {
-                    this.showError(data.error, data.suggestion);
-                } else {
-                    this.showError(data.error || 'Failed to get video information');
-                }
-                return;
-            }
-
-            this.displayVideoInfo(data);
-            this.updateQualityOptions(data.formats);
-            this.downloadOptions.style.display = 'block';
-            this.showMessage('Video information loaded successfully!', 'success');
-
-        } catch (error) {
-            this.showError('Network error. Please check your connection and try again.');
-        } finally {
-            this.setLoadingState('info', false);
-        }
-    }
-
-    displayVideoInfo(info) {
-        const formatDuration = (seconds) => {
-            if (!seconds) return 'Unknown';
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = seconds % 60;
             
-            if (hours > 0) {
-                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-            }
-            return `${minutes}:${secs.toString().padStart(2, '0')}`;
-        };
-
-        const formatNumber = (num) => {
-            if (!num) return 'Unknown';
-            return num.toLocaleString();
-        };
-
-        const formatDate = (dateStr) => {
-            if (!dateStr) return 'Unknown';
-            const year = dateStr.substring(0, 4);
-            const month = dateStr.substring(4, 6);
-            const day = dateStr.substring(6, 8);
-            return `${year}-${month}-${day}`;
-        };
-
-        this.videoInfo.innerHTML = `
-            <div class="info-grid">
-                <div class="info-item">
-                    <strong>Title:</strong>
-                    <span>${info.title}</span>
-                </div>
-                <div class="info-item">
-                    <strong>Duration:</strong>
-                    <span>${formatDuration(info.duration)}</span>
-                </div>
-                <div class="info-item">
-                    <strong>Uploader:</strong>
-                    <span>${info.uploader}</span>
-                </div>
-                <div class="info-item">
-                    <strong>Views:</strong>
-                    <span>${formatNumber(info.view_count)}</span>
-                </div>
-                <div class="info-item">
-                    <strong>Upload Date:</strong>
-                    <span>${formatDate(info.upload_date)}</span>
-                </div>
-                ${info.thumbnail ? `
-                <div class="info-item thumbnail-item">
-                    <strong>Thumbnail:</strong>
-                    <img src="${info.thumbnail}" alt="Video thumbnail" class="thumbnail">
-                </div>
-                ` : ''}
-                ${info.description ? `
-                <div class="info-item description-item">
-                    <strong>Description:</strong>
-                    <p class="description">${info.description}</p>
-                </div>
-                ` : ''}
-            </div>
-        `;
-        
-        this.videoInfo.style.display = 'block';
-    }
-
-    updateQualityOptions(formats = null) {
-        const format = this.formatSelect.value;
-        const qualitySelect = this.qualitySelect;
-        
-        // Clear existing options
-        qualitySelect.innerHTML = '';
-        
-        if (format === 'mp3') {
-            // For audio, only show quality option
-            const option = document.createElement('option');
-            option.value = '192';
-            option.textContent = '192 kbps';
-            qualitySelect.appendChild(option);
-        } else {
-            // For video, show available qualities
-            const defaultQualities = ['best', '1080', '720', '480', '360', 'worst'];
-            
-            if (formats && formats.length > 0) {
-                // Add 'best' option
-                const bestOption = document.createElement('option');
-                bestOption.value = 'best';
-                bestOption.textContent = 'Best Available';
-                qualitySelect.appendChild(bestOption);
-                
-                // Add available qualities from video info
-                const availableQualities = formats
-                    .map(f => parseInt(f.quality.replace('p', '')))
-                    .sort((a, b) => b - a); // Sort descending
-                
-                availableQualities.forEach(quality => {
-                    const option = document.createElement('option');
-                    option.value = quality.toString();
-                    option.textContent = `${quality}p`;
-                    qualitySelect.appendChild(option);
-                });
-                
-                // Add 'worst' option
-                const worstOption = document.createElement('option');
-                worstOption.value = 'worst';
-                worstOption.textContent = 'Worst Available';
-                qualitySelect.appendChild(worstOption);
+            if (response.ok) {
+                showVideoInfo(data);
             } else {
-                // Fallback to default qualities
-                defaultQualities.forEach(quality => {
-                    const option = document.createElement('option');
-                    option.value = quality;
-                    option.textContent = quality === 'best' ? 'Best Available' : 
-                                       quality === 'worst' ? 'Worst Available' : `${quality}p`;
-                    qualitySelect.appendChild(option);
-                });
+                hideVideoInfo();
+                // For authentication errors, show a subtle message
+                if (response.status === 429) {
+                    const errorData = await response.json();
+                    showError(errorData.error || 'Unable to fetch video info.', errorData.suggestion);
+                }
             }
+        } catch (error) {
+            hideVideoInfo();
+            // Silently fail for info fetching
         }
     }
 
-    async downloadVideo() {
-        const url = this.urlInput.value.trim();
+    async function downloadVideo(url, format) {
+        setLoadingState(true);
+        hideMessages();
         
-        if (!this.validateUrl(url)) {
-            return;
-        }
-
-        const format = this.formatSelect.value;
-        const quality = this.qualitySelect.value;
-
-        this.setLoadingState('download', true);
-        this.showProgress(true);
-
         try {
             const response = await fetch('/download', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
-                    url, 
-                    format, 
-                    quality 
-                })
+                body: JSON.stringify({ url, format })
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                this.showError(data.error, data.suggestion);
-                return;
-            }
-
-            if (data.success) {
-                this.showMessage('Download completed! Starting file download...', 'success');
+            
+            if (response.ok) {
+                // Check if response is a file or JSON
+                const contentType = response.headers.get('Content-Type');
                 
-                // Create download link
-                const downloadLink = document.createElement('a');
-                downloadLink.href = `/file/${data.file_id}`;
-                downloadLink.download = data.filename;
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
-                
-                this.showMessage('File download started!', 'success');
+                if (contentType && contentType.includes('application/json')) {
+                    // Handle JSON response (error case)
+                    const errorData = await response.json();
+                    showError(errorData.error || 'Download failed. Please try again.', errorData.suggestion);
+                } else {
+                    // Handle file download
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    
+                    // Get filename from Content-Disposition header or create one
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    let filename = 'video';
+                    
+                    if (contentDisposition) {
+                        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                        if (filenameMatch) {
+                            filename = filenameMatch[1];
+                        }
+                    }
+                    
+                    // Create download link and trigger download
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    // Clean up
+                    window.URL.revokeObjectURL(downloadUrl);
+                    
+                    showSuccess();
+                }
+            } else {
+                // Handle error responses
+                try {
+                    const errorData = await response.json();
+                    showError(errorData.error || 'Download failed. Please try again.', errorData.suggestion);
+                } catch {
+                    showError('Download failed. Please try again.');
+                }
             }
-
         } catch (error) {
-            this.showError('Network error. Please check your connection and try again.');
+            console.error('Download error:', error);
+            showError('Network error. Please check your connection and try again.');
         } finally {
-            this.setLoadingState('download', false);
-            this.showProgress(false);
+            setLoadingState(false);
         }
     }
-}
 
-// Initialize the application when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-    new VideoDownloader();
+    // Utility functions
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    // Analytics and user experience enhancements
+    function trackEvent(eventName, properties = {}) {
+        // Placeholder for analytics tracking
+        console.log('Event:', eventName, properties);
+    }
+
+    function formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    }
+
+    function isValidUrl(string) {
+        try {
+            const url = new URL(string);
+            const supportedDomains = [
+                'youtube.com', 'youtu.be', 'www.youtube.com',
+                'tiktok.com', 'www.tiktok.com', 'vm.tiktok.com',
+                'instagram.com', 'www.instagram.com',
+                'facebook.com', 'www.facebook.com', 'fb.watch',
+                'twitter.com', 'www.twitter.com', 'x.com',
+                'vimeo.com', 'www.vimeo.com',
+                'dailymotion.com', 'www.dailymotion.com',
+                'twitch.tv', 'www.twitch.tv'
+            ];
+            
+            return supportedDomains.some(domain => 
+                url.hostname === domain || url.hostname.endsWith('.' + domain)
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    // Expose some functions globally for debugging
+    window.videoDownloader = {
+        clearUrl,
+        fetchVideoInfo,
+        downloadVideo
+    };
 });
