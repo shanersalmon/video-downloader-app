@@ -6,17 +6,12 @@ import threading
 import time
 from urllib.parse import urlparse
 import re
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from collections import defaultdict
 
 app = Flask(__name__)
 
-# Rate limiting
-limiter = Limiter(
-    app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
-)
+# Custom rate limiting
+rate_limit_storage = defaultdict(list)
 
 # Global variables for cleanup
 download_files = {}
@@ -79,7 +74,6 @@ def index():
     return render_template('index.html')
 
 @app.route('/download', methods=['POST'])
-@limiter.limit("10 per minute")
 def download_video():
     try:
         data = request.get_json()
@@ -215,7 +209,6 @@ def get_file(file_id):
     return send_file(file_path, as_attachment=True, download_name=filename)
 
 @app.route('/info', methods=['POST'])
-@limiter.limit("20 per minute")
 def get_video_info():
     try:
         data = request.get_json()
